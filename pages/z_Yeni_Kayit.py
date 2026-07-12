@@ -42,20 +42,26 @@ def init_db():
                         sirket TEXT, fiili_birim TEXT, iban TEXT, banka TEXT,
                         yillik_izin_baz TEXT, sgk_giris TEXT, banka_sube_kodu TEXT, banka_sube_adi TEXT)''')
     
-    # Maaş sütunlarının kontrolü ve eklenmesi
+    # Maaş ve Meslek Kodu sütunlarının eksiklik kontrolü ve eklenmesi
     cursor.execute("PRAGMA table_info(personel)")
     sutunlar = [row[1] for row in cursor.fetchall()]
-    if 'maas' not in sutunlar:
-        cursor.execute("ALTER TABLE personel ADD COLUMN maas REAL DEFAULT 0")
-    if 'maas_tipi' not in sutunlar:
-        cursor.execute("ALTER TABLE personel ADD COLUMN maas_tipi TEXT DEFAULT 'Net'")
-        
+    
+    eksik_sutunlar = ['maas', 'maas_tipi', 'meslek_kodu']
+    for sutun in eksik_sutunlar:
+        if sutun not in sutunlar:
+            if sutun == 'maas':
+                cursor.execute(f"ALTER TABLE personel ADD COLUMN {sutun} REAL DEFAULT 0")
+            elif sutun == 'maas_tipi':
+                cursor.execute(f"ALTER TABLE personel ADD COLUMN {sutun} TEXT DEFAULT 'Net'")
+            else:
+                cursor.execute(f"ALTER TABLE personel ADD COLUMN {sutun} TEXT")
+                
     # İzinler tablosu
     cursor.execute('''CREATE TABLE IF NOT EXISTS izinler (
                         id INTEGER PRIMARY KEY AUTOINCREMENT, tc_kimlik TEXT, 
                         tur TEXT, baslangic TEXT, bitis TEXT, gun INTEGER, aciklama TEXT)''')
     
-    # Evraklar tablosu (Güncel 15 Sütun)
+    # Evraklar tablosu
     cursor.execute('''CREATE TABLE IF NOT EXISTS evraklar (
                         tc_kimlik TEXT PRIMARY KEY,
                         evrak1_onay INTEGER, evrak1_tarih TEXT,
@@ -68,7 +74,6 @@ def init_db():
     
     conn.commit()
     conn.close()
-
 # --- AKILLI SQL KAYIT FONKSİYONLARI ---
 def personel_kaydet_veya_guncelle(data):
     conn = sqlite3.connect(DB_PATH)
