@@ -200,9 +200,11 @@ with content:
     with col_butonlar:
         st.write("") 
         if not st.session_state.duzenle:
-            if st.button("✏️ Bilgileri Düzenle", use_container_width=True):
-                st.session_state.duzenle = True
-                st.rerun()
+            # GÜVENLİK AYARI: İzleyici rolündeki kullanıcı "Düzenle" butonunu hiç görmesin
+            if st.session_state.role != "İzleyici":
+                if st.button("✏️ Bilgileri Düzenle", use_container_width=True):
+                    st.session_state.duzenle = True
+                    st.rerun()
             if st.button("⬅️ Listeye Dön", use_container_width=True):
                 st.switch_page("pages/1_Personel_Sicil_Kartlari.py")
         else:
@@ -411,46 +413,55 @@ with content:
         submit_buton = st.form_submit_button("💾 Tüm Değişiklikleri Kaydet", disabled=not st.session_state.duzenle)
         
         if submit_buton:
-            eski_tc = st.session_state.secili_tc
-            yeni_foto_yolu = os.path.join(FOTO_DIR, f"{y_tc}.png")
-            if eski_tc != y_tc and os.path.exists(os.path.join(FOTO_DIR, f"{eski_tc}.png")):
-                os.rename(os.path.join(FOTO_DIR, f"{eski_tc}.png"), yeni_foto_yolu)
-            if yeni_foto is not None:
-                with open(yeni_foto_yolu, "wb") as f: 
-                    f.write(yeni_foto.getbuffer())
+            # --- ROL VE YETKİ KONTROL PANELİ ---
+            if st.session_state.role == "İzleyici":
+                st.error("⚠️ Sadece görüntüleme yetkiniz vardır, işlem yapamazsınız.")
+                
+            elif st.session_state.role == "Kayıt Uzmanı":
+                st.error("⚠️ Değişiklik yapma yetkiniz yoktur lütfen yöneticinize danışınız.")
+                
+            else:
+                # Sadece 'Yönetici' rolüne sahip olanlar bu bloğa geçebilir ve güncelleyebilir
+                eski_tc = st.session_state.secili_tc
+                yeni_foto_yolu = os.path.join(FOTO_DIR, f"{y_tc}.png")
+                if eski_tc != y_tc and os.path.exists(os.path.join(FOTO_DIR, f"{eski_tc}.png")):
+                    os.rename(os.path.join(FOTO_DIR, f"{eski_tc}.png"), yeni_foto_yolu)
+                if yeni_foto is not None:
+                    with open(yeni_foto_yolu, "wb") as f: 
+                        f.write(yeni_foto.getbuffer())
 
-            # Kayıt anında seçilmeyen boş tarihleri ("None") boş string "" olarak gönder
-            p_yeni_data = (
-                y_ad, y_bolum, str(y_ise_giris), str(y_dogum_t), y_dogum_y, 
-                y_baba, y_anne, y_tel, y_mail, y_adres, y_askerlik, 
-                y_medeni, y_mezuniyet, y_sirket, y_birim, y_iban, y_banka, 
-                str(y_izin_baz), str(y_sgk), y_sube_kodu, y_sube_adi,
-                str(y_sgk_cikis) if y_sgk_cikis else "", 
-                str(y_is_arama_izni), 
-                str(y_fiili_cikis) if y_fiili_cikis else "",
-                1 if y_c_istifa else 0, 1 if y_c_onay else 0, 1 if y_c_teblig else 0,
-                1 if y_c_ibraname else 0, 1 if y_c_bordro else 0, 1 if y_c_mutabakat else 0,
-                y_cikis_aciklama, y_cikis_kodu, 
-                1 if y_ihbar_baslat else 0, 
-                str(y_ihbar_islem_t) if y_ihbar_islem_t else "",
-                1 if y_cikis_yap else 0, 
-                str(y_cikis_islem_t) if y_cikis_islem_t else "", 
-                str(y_ihbar_baslangic) if y_ihbar_baslangic else "",
-                y_meslek_kodu,
-                float(y_maas_tutari),
-                y_maas_tipi,
-                y_tc 
-            )
-            
-            e_yeni_data = (
-                y_evrak_onay[0], y_evrak_tarih[0], y_evrak_onay[1], y_evrak_tarih[1],
-                y_evrak_onay[2], y_evrak_tarih[2], y_evrak_onay[3], y_evrak_tarih[3],
-                y_evrak_onay[4], y_evrak_tarih[4], y_evrak_onay[5], y_evrak_tarih[5],
-                y_evrak_onay[6], y_evrak_tarih[6], y_tc
-            )
-            
-            verileri_guncelle(eski_tc, y_tc, p_yeni_data, e_yeni_data)
-            st.session_state.secili_tc = y_tc
-            st.success("Tüm veriler, meslek, maaş bilgisi ve çıkış kodları dahil başarıyla güncellendi!")
-            st.session_state.duzenle = False
-            st.rerun()
+                # Kayıt anında seçilmeyen boş tarihleri ("None") boş string "" olarak gönder
+                p_yeni_data = (
+                    y_ad, y_bolum, str(y_ise_giris), str(y_dogum_t), y_dogum_y, 
+                    y_baba, y_anne, y_tel, y_mail, y_adres, y_askerlik, 
+                    y_medeni, y_mezuniyet, y_sirket, y_birim, y_iban, y_banka, 
+                    str(y_izin_baz), str(y_sgk), y_sube_kodu, y_sube_adi,
+                    str(y_sgk_cikis) if y_sgk_cikis else "", 
+                    str(y_is_arama_izni), 
+                    str(y_fiili_cikis) if y_fiili_cikis else "",
+                    1 if y_c_istifa else 0, 1 if y_c_onay else 0, 1 if y_c_teblig else 0,
+                    1 if y_c_ibraname else 0, 1 if y_c_bordro else 0, 1 if y_c_mutabakat else 0,
+                    y_cikis_aciklama, y_cikis_kodu, 
+                    1 if y_ihbar_baslat else 0, 
+                    str(y_ihbar_islem_t) if y_ihbar_islem_t else "",
+                    1 if y_cikis_yap else 0, 
+                    str(y_cikis_islem_t) if y_cikis_islem_t else "", 
+                    str(y_ihbar_baslangic) if y_ihbar_baslangic else "",
+                    y_meslek_kodu,
+                    float(y_maas_tutari),
+                    y_maas_tipi,
+                    y_tc 
+                )
+                
+                e_yeni_data = (
+                    y_evrak_onay[0], y_evrak_tarih[0], y_evrak_onay[1], y_evrak_tarih[1],
+                    y_evrak_onay[2], y_evrak_tarih[2], y_evrak_onay[3], y_evrak_tarih[3],
+                    y_evrak_onay[4], y_evrak_tarih[4], y_evrak_onay[5], y_evrak_tarih[5],
+                    y_evrak_onay[6], y_evrak_tarih[6], y_tc
+                )
+                
+                verileri_guncelle(eski_tc, y_tc, p_yeni_data, e_yeni_data)
+                st.session_state.secili_tc = y_tc
+                st.success("Tüm veriler, meslek, maaş bilgisi ve çıkış kodları dahil başarıyla güncellendi!")
+                st.session_state.duzenle = False
+                st.rerun()
