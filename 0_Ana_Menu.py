@@ -168,3 +168,10 @@ with content:
                 st.switch_page("pages/rapor_hazirlama_ekrani.py")
 
         st.write("---")
+
+# Sadece Yöneticilere Özel Alan
+        if st.session_state.role == "Yönetici":
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔐 Sistem ve Kullanıcı Yönetimi", use_container_width=True):
+                st.switch_page("pages/kullanici_yonetimi.py")
+            st.write("---")
