@@ -3,6 +3,12 @@ import pandas as pd
 import sqlite3
 from io import BytesIO
 
+from utils import init_session
+init_session()
+if not st.session_state.logged_in:
+    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
+    st.stop()
+
 st.set_page_config(layout="wide", page_title="Modu İK - Raporlama")
 
 DB_PATH = "modu_ik/personel_sistemi.db"
