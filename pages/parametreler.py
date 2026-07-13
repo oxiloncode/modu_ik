@@ -4,6 +4,12 @@ import sqlite3
 import os
 import math
 
+from utils import init_session
+init_session()
+if not st.session_state.logged_in:
+    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
+    st.stop()
+
 # Sayfa Ayarları
 st.set_page_config(layout="wide")
 
