@@ -1,25 +1,26 @@
 import streamlit as st
-from utils import init_session
+from utils import init_session, init_users_db, login_user
 
-# Sayfa ayarları - Streamlit kuralı gereği en üstte ve tek bir yerde olmalıdır
+# Sayfa ayarları - Streamlit kuralı gereği en üstte olmalıdır
 st.set_page_config(page_title="Modu İK - Ana Menü", page_icon="https://i.hizliresim.com/19ai6mx.png", layout="wide")
 
-# Sayfayı ortalayan ve sabitleyen çerçeve yapısı
+# Oturumu ve Kullanıcı tablosunu başlat
+init_session()
+init_users_db()
+
+# Sayfayı ortalayan çerçeve yapısı
 def page_wrapper():
     left_spacer, main_content, right_spacer = st.columns([1, 4, 1])
     return main_content
 
 content = page_wrapper()
 
-# DÜZENLENMİŞ CSS (Buton ezilmelerini engelleyen yapı)
+# DÜZENLENMİŞ CSS
 st.markdown("""
     <style>
     .stTextInput {
         max-width: 500px;
     }
-    
-    /* Butonlardaki sabit 300px sınırını kaldırdık. 
-       Metinlerin alt satıra inmesine izin verip yüksekliği artırdık. */
     div.stButton > button {
         height: 65px;
         font-size: 16px !important;
@@ -29,24 +30,16 @@ st.markdown("""
         word-wrap: break-word;
         transition: all 0.3s ease;
     }
-    
-    /* Fareyle üzerine gelince şık bir havaya kalkma efekti */
     div.stButton > button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
-    
-    /* Ana uygulama arka planı */
     .stApp {
         background-color: #ffffff !important;
     }
-    
-    /* Yan menü (eğer görünürse) arka planı */
     [data-testid="stSidebar"] {
         background-color: #ffffff !important;
     }
-
-    /* Sağ üst köşedeki Geliştirici LinkedIn Butonu */
     .linkedin-dev-btn {
         position: fixed;
         top: 55px;
@@ -87,12 +80,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 with content:
-    st.title("")
-
-    # 1. Logo Bölümü
+    # Logo Alanı
     st.markdown("""
         <style>
-        .logo-container { display: flex; justify-content: center; margin-bottom: 30px; }
+        .logo-container { display: flex; justify-content: center; margin-bottom: 20px; margin-top: 40px; }
         .logo-box { 
             border: 2px solid #333; 
             padding: 15px 40px; 
@@ -109,36 +100,71 @@ with content:
     """, unsafe_allow_html=True)
 
     st.markdown("<h2 style='text-align: center;'>Personel Yönetim Sistemi</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Hoş geldiniz, lütfen bir işlem seçin:</p>", unsafe_allow_html=True)
     st.write("---")
 
-    # --- 1. SATIR (3 Buton) ---
-    col1, col2, col3 = st.columns(3)
+    # KULLANICI GİRİŞ KONTROLÜ
+    if not st.session_state.logged_in:
+        st.markdown("<h3 style='text-align: center; color: #333;'>Sistem Girişi</h3>", unsafe_allow_html=True)
+        
+        # Giriş panelini ortalayan kolon düzeni
+        col_sol, col_orta, col_sag = st.columns([1, 1.5, 1])
+        with col_orta:
+            kullanici_adi = st.text_input("Kullanıcı Adı", placeholder="Kullanıcı adınızı girin")
+            sifre = st.text_input("Şifre", type="password", placeholder="Şifrenizi girin")
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.button("🔑 Giriş Yap", use_container_width=True):
+                user_info = login_user(kullanici_adi, sifre)
+                if user_info:
+                    st.session_state.logged_in = True
+                    st.session_state.username = user_info["kullanici_adi"]
+                    st.session_state.role = user_info["rol"]
+                    st.success("Giriş Başarılı! Sisteme yönlendiriliyorsunuz...")
+                    st.rerun()
+                else:
+                    st.error("Kullanıcı adı veya şifre hatalı!")
+                    
+    else:
+        # Oturum açık ise ana menü arayüzü gösterilir
+        st.markdown(f"<p style='text-align: center;'>Hoş geldiniz, <b>{st.session_state.username} ({st.session_state.role})</b></p>", unsafe_allow_html=True)
+        
+        # Oturumu kapat butonu
+        c_sol, c_orta, c_sag = st.columns([2, 1, 2])
+        with c_orta:
+            if st.button("🚪 Oturumu Kapat", use_container_width=True):
+                st.session_state.logged_in = False
+                st.session_state.username = ""
+                st.session_state.role = ""
+                st.rerun()
+                
+        st.write("---")
 
-    with col1:
-        if st.button("👤 Personel Sicil Kartlari", use_container_width=True):
-            st.switch_page("pages/1_Personel_Sicil_Kartlari.py")
+        # --- 1. SATIR (3 Buton) ---
+        col1, col2, col3 = st.columns(3)
 
-    with col2:
-        if st.button("🗓️ İzin Takibi", use_container_width=True):
-            st.switch_page("pages/izin_takibi.py")
+        with col1:
+            if st.button("👤 Personel Sicil Kartlari", use_container_width=True):
+                st.switch_page("pages/1_Personel_Sicil_Kartlari.py")
 
-    with col3:
-        if st.button("⚖️ İcra Takibi", use_container_width=True):
-            st.switch_page("pages/icra_takibi.py")
+        with col2:
+            if st.button("🗓️ İzin Takibi", use_container_width=True):
+                st.switch_page("pages/izin_takibi.py")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        with col3:
+            if st.button("⚖️ İcra Takibi", use_container_width=True):
+                st.switch_page("pages/icra_takibi.py")
 
-    # --- 2. SATIR (2 Butonu Ortalamak İçin Boşluklu Yapı) ---
-    bos_sol, col4, col5, bos_sag = st.columns([0.5, 1, 1, 0.5])
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    with col4:
-        if st.button("⚙️ Parametre Yönetimi", use_container_width=True):
-            st.switch_page("pages/parametreler.py")
+        # --- 2. SATIR (2 Buton) ---
+        bos_sol, col4, col5, bos_sag = st.columns([0.5, 1, 1, 0.5])
 
-    with col5:
-        # Rapor Hazırlama ekranına yönlendirme (Aktif edildi)
-        if st.button("📊 Rapor Hazırlama Ekranı", use_container_width=True):
-            st.switch_page("pages/rapor_hazirlama_ekrani.py")
+        with col4:
+            if st.button("⚙️ Parametre Yönetimi", use_container_width=True):
+                st.switch_page("pages/parametreler.py")
 
-    st.write("---")
+        with col5:
+            if st.button("📊 Rapor Hazırlama Ekranı", use_container_width=True):
+                st.switch_page("pages/rapor_hazirlama_ekrani.py")
+
+        st.write("---")
