@@ -6,6 +6,12 @@ from dateutil.relativedelta import relativedelta
 import math
 import locale
 
+from utils import init_session
+init_session()
+if not st.session_state.logged_in:
+    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
+    st.stop()
+
 # Türkçe ay isimleri için (sunucuda hata vermemesi adına try-except içinde)
 try:
     locale.setlocale(locale.LC_TIME, 'tr_TR.UTF-8')
