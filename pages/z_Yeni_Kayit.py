@@ -6,6 +6,12 @@ from dateutil.relativedelta import relativedelta
 import sqlite3
 import os
 
+from utils import init_session
+init_session()
+if not st.session_state.logged_in:
+    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
+    st.stop()
+
 # Sayfa ayarları hata vermemesi için ilk komut olmalı
 st.set_page_config(layout="wide")
 
