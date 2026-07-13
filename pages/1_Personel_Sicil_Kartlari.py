@@ -2,6 +2,12 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 
+from utils import init_session
+init_session()
+if not st.session_state.logged_in:
+    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
+    st.stop()
+
 # Sayfa ayarları
 st.set_page_config(layout="wide")
 DB_PATH = "modu_ik/personel_sistemi.db"
