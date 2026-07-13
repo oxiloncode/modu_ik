@@ -44,8 +44,10 @@ with content:
         if st.button("🏠 Ana Menü", use_container_width=True):
             st.switch_page("0_Ana_Menu.py") 
     with col_ekle:
-        if st.button("➕ Yeni Personel Ekle", use_container_width=True):
-            st.switch_page("pages/z_Yeni_Kayit.py")
+        # Eğer rol "İzleyici" DEĞİLSE bu butonu göster (Kayıt Uzmanı ve Yönetici görebilir)
+if st.session_state.role != "İzleyici":
+    if st.button("➕ Yeni Personel Ekle", use_container_width=True):
+        st.switch_page("pages/z_Yeni_Kayit.py")
 
     st.write("---")
     
