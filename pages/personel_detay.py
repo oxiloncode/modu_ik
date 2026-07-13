@@ -5,6 +5,12 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import os
 
+from utils import init_session
+init_session()
+if not st.session_state.logged_in:
+    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
+    st.stop()
+
 # Sayfa Ayarları (Hata vermemesi için en üstte ve tek bir yerde)
 st.set_page_config(layout="wide")
 
