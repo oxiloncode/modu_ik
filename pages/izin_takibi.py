@@ -4,6 +4,12 @@ import sqlite3
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
+from utils import init_session
+init_session()
+if not st.session_state.logged_in:
+    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
+    st.stop()
+
 # --- SAYFA AYARLARI ---
 st.set_page_config(layout="wide")
 DB_PATH = "modu_ik/personel_sistemi.db"
