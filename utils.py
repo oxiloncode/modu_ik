@@ -1,56 +1,88 @@
+import streamlit as st
+import pandas as pd
 import sqlite3
 import hashlib
-import os
-import streamlit as st
 
-DB_PATH = "modu_ik/personel_sistemi.db"
+# -----------------------------------------------------
+# 1. GÖRSEL VE ARAYÜZ FONKSİYONLARI (Senin Mevcut Kodların)
+# -----------------------------------------------------
 
-def make_hashes(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_hashes(password, hashed_password):
-    if make_hashes(password) == hashed_password:
-        return True
-    return False
-
-def init_users_db():
-    if not os.path.exists("modu_ik"): 
-        os.makedirs("modu_ik")
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS kullanicilar (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        kullanici_adi TEXT UNIQUE,
-                        sifre TEXT,
-                        rol TEXT)''')
-    
-    cursor.execute("SELECT * FROM kullanicilar")
-    if not cursor.fetchone():
-        hashed_pw = make_hashes("admin123")
-        cursor.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol) VALUES (?, ?, ?)", 
-                       ("admin", hashed_pw, "Yönetici"))
-        conn.commit()
-        
-    conn.close()
-
-def login_user(username, password):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT sifre, rol FROM kullanicilar WHERE kullanici_adi = ?", (username,))
-    result = cursor.fetchone()
-    conn.close()
-    
-    if result:
-        hashed_password, rol = result
-        if check_hashes(password, hashed_password):
-            return {"kullanici_adi": username, "rol": rol}
-    return None
+# Sayfayı ortalayan ve sabitleyen çerçeve yapısı
+def page_wrapper():
+    # Sayfayı 3'e böl, ortadaki kısımları ana içerik alanı yap
+    left_spacer, main_content, right_spacer = st.columns([1, 4, 1])
+    return main_content
 
 def init_session():
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
-    if "username" not in st.session_state:
-        st.session_state.username = ""
-    if "role" not in st.session_state:
-        st.session_state.role = ""
+    if 'personel_listesi' not in st.session_state:
+        st.session_state.personel_listesi = pd.DataFrame(columns=["Ad Soyad", "TC Kimlik", "Departman"])
+    if 'icra_listesi' not in st.session_state:
+        st.session_state.icra_listesi = pd.DataFrame(columns=["Dosya No", "Borçlu Adı", "Tutar"])
+
+def display_tabs():
+    pass
+
+# -----------------------------------------------------
+# 2. GÜVENLİK VE ŞİFRELEME FONKSİYONLARI (Yeni Eklenenler)
+# -----------------------------------------------------
+
+def make_hashes(password):
+    """Girilen şifreyi SHA-256 algoritması ile kriptolar."""
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password, hashed_text):
+    """Kullanıcının girdiği şifre ile veritabanındaki kriptolu şifreyi karşılaştırır."""
+    if make_hashes(password) == hashed_text:
+        return hashed_text
+    return False
+
+# -----------------------------------------------------
+# 3. VERİTABANI VE KULLANICI YÖNETİMİ (Yeni Eklenenler)
+# -----------------------------------------------------
+
+def init_users_db():
+    """SQLite veritabanını ve kullanıcılar tablosunu oluşturur.
+    Eğer sistemde hiç kullanıcı yoksa varsayılan Yönetici hesabını ekler."""
+    
+    # personel_sistemi.db adında bir dosya oluşturur (veya varsa bağlanır)
+    conn = sqlite3.connect('personel_sistemi.db')
+    c = conn.cursor()
+    
+    # Kullanıcılar tablosunu oluştur
+    c.execute('''CREATE TABLE IF NOT EXISTS kullanicilar
+                 (kullanici_adi TEXT PRIMARY KEY, sifre TEXT, rol TEXT)''')
+    
+    # Tabloda hiç kayıt var mı diye kontrol et
+    c.execute('SELECT * FROM kullanicilar')
+    if not c.fetchall():
+        # Sistem boşsa ilk Kurucu/Yönetici hesabını oluştur
+        varsayilan_kullanici = "admin"
+        varsayilan_sifre = make_hashes("123456") # Şifre: 123456 olarak kriptolanır
+        varsayilan_rol = "Yönetici"
+        
+        c.execute('INSERT INTO kullanicilar (kullanici_adi, sifre, rol) VALUES (?, ?, ?)', 
+                  (varsayilan_kullanici, varsayilan_sifre, varsayilan_rol))
+    
+    conn.commit()
+    conn.close()
+
+def login_user(kullanici_adi, sifre):
+    """Giriş ekranında bilgileri doğrular. Başarılıysa kullanıcının rolünü döndürür."""
+    conn = sqlite3.connect('personel_sistemi.db')
+    c = conn.cursor()
+    
+    # Veritabanından kullanıcıyı bul
+    c.execute('SELECT sifre, rol FROM kullanicilar WHERE kullanici_adi = ?', (kullanici_adi,))
+    data = c.fetchone()
+    conn.close()
+    
+    if data:
+        hashed_sifre = data[0]
+        rol = data[1]
+        
+        # Şifreler eşleşiyorsa rolü sisteme bildir
+        if check_hashes(sifre, hashed_sifre):
+            return rol
+            
+    # Kullanıcı yoksa veya şifre yanlışsa False döndür
+    return False
