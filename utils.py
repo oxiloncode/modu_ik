@@ -4,7 +4,7 @@ import sqlite3
 import hashlib
 
 # -----------------------------------------------------
-# 1. GÖRSEL VE ARAYÜZ FONKSİYONLARI (Senin Mevcut Kodların)
+# 1. GÖRSEL VE ARAYÜZ FONKSİYONLARI 
 # -----------------------------------------------------
 
 # Sayfayı ortalayan ve sabitleyen çerçeve yapısı
@@ -14,16 +14,25 @@ def page_wrapper():
     return main_content
 
 def init_session():
+    # Tablo verileri
     if 'personel_listesi' not in st.session_state:
         st.session_state.personel_listesi = pd.DataFrame(columns=["Ad Soyad", "TC Kimlik", "Departman"])
     if 'icra_listesi' not in st.session_state:
         st.session_state.icra_listesi = pd.DataFrame(columns=["Dosya No", "Borçlu Adı", "Tutar"])
+        
+    # Giriş ve Yetkilendirme durumları (Yeni Eklenen Kısım)
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'username' not in st.session_state:
+        st.session_state.username = ""
+    if 'role' not in st.session_state:
+        st.session_state.role = None
 
 def display_tabs():
     pass
 
 # -----------------------------------------------------
-# 2. GÜVENLİK VE ŞİFRELEME FONKSİYONLARI (Yeni Eklenenler)
+# 2. GÜVENLİK VE ŞİFRELEME FONKSİYONLARI 
 # -----------------------------------------------------
 
 def make_hashes(password):
@@ -37,7 +46,7 @@ def check_hashes(password, hashed_text):
     return False
 
 # -----------------------------------------------------
-# 3. VERİTABANI VE KULLANICI YÖNETİMİ (Yeni Eklenenler)
+# 3. VERİTABANI VE KULLANICI YÖNETİMİ 
 # -----------------------------------------------------
 
 def init_users_db():
