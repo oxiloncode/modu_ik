@@ -4,12 +4,6 @@ import sqlite3
 import os
 import math
 
-from utils import init_session
-init_session()
-if not st.session_state.logged_in:
-    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
-    st.stop()
-
 # Sayfa Ayarları
 st.set_page_config(layout="wide")
 
@@ -55,10 +49,18 @@ def init_parametre_db():
                         kod TEXT UNIQUE,
                         tanim TEXT)''')
     
-    cursor.execute("PRAGMA table_info(personel)")
-    sutunlar = [row[1] for row in cursor.fetchall()]
-    if 'meslek_kodu' not in sutunlar:
-        cursor.execute("ALTER TABLE personel ADD COLUMN meslek_kodu TEXT")
+    # GÜVENLİ KONTROL: Personel tablosu var mı kontrol et
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='personel'")
+    tablo_var_mi = cursor.fetchone()
+    
+    if tablo_var_mi:
+        cursor.execute("PRAGMA table_info(personel)")
+        sutunlar = [row[1] for row in cursor.fetchall()]
+        if 'meslek_kodu' not in sutunlar:
+            try:
+                cursor.execute("ALTER TABLE personel ADD COLUMN meslek_kodu TEXT")
+            except sqlite3.OperationalError:
+                pass # Sütun zaten eklenmişse veya başka bir çakışma varsa yoksay
         
     conn.commit()
     conn.close()
@@ -86,8 +88,12 @@ def veri_sil(tablo, row_id):
 
 def verileri_listele(tablo):
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query(f"SELECT id, kod, tanim FROM {tablo} ORDER BY kod ASC", conn)
-    conn.close()
+    try:
+        df = pd.read_sql_query(f"SELECT id, kod, tanim FROM {tablo} ORDER BY kod ASC", conn)
+    except Exception:
+        df = pd.DataFrame(columns=['id', 'kod', 'tanim'])
+    finally:
+        conn.close()
     return df
 
 # Sayfa yapısını ortalayan çerçeve
