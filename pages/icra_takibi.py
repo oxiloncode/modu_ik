@@ -6,12 +6,6 @@ from dateutil.relativedelta import relativedelta
 import math
 import locale
 
-from utils import init_session
-init_session()
-if not st.session_state.logged_in:
-    st.warning("⚠️ Lütfen önce Ana Menü'den giriş yapın!")
-    st.stop()
-
 # Türkçe ay isimleri için (sunucuda hata vermemesi adına try-except içinde)
 try:
     locale.setlocale(locale.LC_TIME, 'tr_TR.UTF-8')
@@ -46,8 +40,13 @@ def init_icra_db():
     
     cursor.execute("PRAGMA table_info(personel)")
     sutunlar = [row[1] for row in cursor.fetchall()]
+    
+    # GÜVENLİ SÜTUN EKLEME (OperationalError hatasını engelleyen kısım)
     if 'maas' not in sutunlar:
-        cursor.execute("ALTER TABLE personel ADD COLUMN maas REAL DEFAULT 0")
+        try:
+            cursor.execute("ALTER TABLE personel ADD COLUMN maas REAL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass # Sütun zaten eklenmişse hatayı yoksay ve devam et
         
     cursor.execute('''CREATE TABLE IF NOT EXISTS icra_dosyalari (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
