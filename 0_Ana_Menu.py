@@ -1,5 +1,6 @@
 import streamlit as st
 import utils
+import sqlite3
 
 # Sayfa ayarları - Streamlit kuralı gereği en üstte ve tek bir yerde olmalıdır
 st.set_page_config(page_title="Modu İK - Ana Menü", page_icon="https://i.hizliresim.com/19ai6mx.png", layout="wide")
@@ -7,6 +8,8 @@ st.set_page_config(page_title="Modu İK - Ana Menü", page_icon="https://i.hizli
 # Oturum değişkenlerini ve veritabanını başlat
 utils.init_session()
 utils.init_users_db()
+
+DB_PATH = "modu_ik/personel_sistemi.db"
 
 # Sayfayı ortalayan ve sabitleyen çerçeve yapısı
 def page_wrapper():
@@ -112,30 +115,67 @@ with content:
     """, unsafe_allow_html=True)
 
     # ---------------------------------------------------------
-    # GİRİŞ EKRANI KONTROLÜ
+    # GİRİŞ VE KAYIT EKRANI KONTROLÜ
     # ---------------------------------------------------------
     if not st.session_state.logged_in:
-        st.markdown("<h3 style='text-align: center; color: #333;'>Sisteme Giriş</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #666;'>Lütfen kullanıcı adı ve şifrenizi girin.</p>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: #333;'>Sisteme Giriş & Kayıt</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #666;'>Lütfen işlem yapmak istediğiniz sekmeyi seçin.</p>", unsafe_allow_html=True)
         
-        # Giriş Formu
-        col_form1, col_form2, col_form3 = st.columns([1, 2, 1])
-        with col_form2:
-            kullanici_adi_input = st.text_input("Kullanıcı Adı")
-            sifre_input = st.text_input("Şifre", type="password")
-            
-            if st.button("Giriş Yap", use_container_width=True):
-                # utils.py içindeki fonksiyonu çalıştır
-                kullanici_rolu = utils.login_user(kullanici_adi_input, sifre_input) 
+        tab_login, tab_register = st.tabs(["🔑 Giriş Yap", "📝 Kayıt Ol"])
+        
+        # --- GİRİŞ YAP SEKME İÇERİĞİ ---
+        with tab_login:
+            col_form1, col_form2, col_form3 = st.columns([1, 2, 1])
+            with col_form2:
+                kullanici_adi_input = st.text_input("Kullanıcı Adı", key="login_user")
+                sifre_input = st.text_input("Şifre", type="password", key="login_pass")
                 
-                if kullanici_rolu:
-                    st.session_state.logged_in = True
-                    st.session_state.username = kullanici_adi_input
-                    st.session_state.role = kullanici_rolu
-                    st.success(f"Giriş başarılı! Rolünüz: {kullanici_rolu}. Yönlendiriliyorsunuz...")
-                    st.rerun() # Sayfayı yenile ki ana menü açılsın
-                else:
-                    st.error("Kullanıcı adı veya şifre hatalı!")
+                if st.button("Giriş Yap", use_container_width=True):
+                    kullanici_rolu = utils.login_user(kullanici_adi_input, sifre_input) 
+                    
+                    if kullanici_rolu:
+                        st.session_state.logged_in = True
+                        st.session_state.username = kullanici_adi_input
+                        st.session_state.role = kullanici_rolu
+                        st.success(f"Giriş başarılı! Rolünüz: {kullanici_rolu}. Yönlendiriliyorsunuz...")
+                        st.rerun()
+                    else:
+                        st.error("Kullanıcı adı veya şifre hatalı!")
+
+        # --- KAYIT OL SEKME İÇERİĞİ ---
+        with tab_register:
+            col_reg1, col_reg2, col_reg3 = st.columns([1, 2, 1])
+            with col_reg2:
+                with st.form("kayit_formu", clear_on_submit=True):
+                    yeni_kullanici = st.text_input("Yeni Kullanıcı Adı")
+                    yeni_sifre = st.text_input("Şifre Belirleyin", type="password")
+                    yeni_sifre_tekrar = st.text_input("Şifreyi Tekrar Girin", type="password")
+                    
+                    # Dışarıdan kayıt olanları varsayılan olarak "Kayıt Uzmanı" veya "İzleyici" yapabiliriz.
+                    # Eğer herkesin Yönetici olmasını istemiyorsan buradaki seçenekleri kısıtlayabilirsin.
+                    secilen_rol = st.selectbox("Hesap Türü", ["Kayıt Uzmanı", "İzleyici", "Yönetici"])
+                    
+                    submit_register = st.form_submit_button("Üyeliğimi Oluştur")
+                    
+                    if submit_register:
+                        if yeni_kullanici and yeni_sifre and yeni_sifre_tekrar:
+                            if yeni_sifre == yeni_sifre_tekrar:
+                                conn = sqlite3.connect(DB_PATH)
+                                cursor = conn.cursor()
+                                try:
+                                    hashed_pw = utils.make_hashes(yeni_sifre)
+                                    cursor.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol) VALUES (?, ?, ?)", 
+                                                   (yeni_kullanici, hashed_pw, secilen_rol))
+                                    conn.commit()
+                                    st.success(f"✅ '{yeni_kullanici}' hesabı başarıyla oluşturuldu! Şimdi 'Giriş Yap' sekmesinden sisteme girebilirsiniz.")
+                                except sqlite3.IntegrityError:
+                                    st.error("❌ Bu kullanıcı adı zaten alınmış. Lütfen başka bir ad deneyin.")
+                                finally:
+                                    conn.close()
+                            else:
+                                st.error("❌ Girdiğiniz şifreler birbiriyle eşleşmiyor!")
+                        else:
+                            st.warning("⚠️ Lütfen tüm alanları eksiksiz doldurun.")
 
     # ---------------------------------------------------------
     # ANA MENÜ (Giriş Başarılıysa Gösterilecek Kısım)
@@ -180,7 +220,7 @@ with content:
                 st.switch_page("pages/parametreler.py")
 
         with col5:
-            # Rapor Hazırlama ekranına yönlendirme (Aktif edildi)
+            # Rapor Hazırlama ekranına yönlendirme
             if st.button("📊 Rapor Hazırlama Ekranı", use_container_width=True):
                 st.switch_page("pages/rapor_hazirlama_ekrani.py")
 
