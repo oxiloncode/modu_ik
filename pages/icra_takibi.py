@@ -38,15 +38,18 @@ def init_icra_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("PRAGMA table_info(personel)")
-    sutunlar = [row[1] for row in cursor.fetchall()]
+    # GÜVENLİ KONTROL: Personel tablosu var mı kontrol et
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='personel'")
+    tablo_var_mi = cursor.fetchone()
     
-    # GÜVENLİ SÜTUN EKLEME (OperationalError hatasını engelleyen kısım)
-    if 'maas' not in sutunlar:
-        try:
-            cursor.execute("ALTER TABLE personel ADD COLUMN maas REAL DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass # Sütun zaten eklenmişse hatayı yoksay ve devam et
+    if tablo_var_mi:
+        cursor.execute("PRAGMA table_info(personel)")
+        sutunlar = [row[1] for row in cursor.fetchall()]
+        if 'maas' not in sutunlar:
+            try:
+                cursor.execute("ALTER TABLE personel ADD COLUMN maas REAL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass 
         
     cursor.execute('''CREATE TABLE IF NOT EXISTS icra_dosyalari (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,29 +71,42 @@ init_icra_db()
 # --- VERİ ÇEKME VE GÜNCELLEME FONKSİYONLARI ---
 def personelleri_getir():
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT tc_kimlik, ad_soyad, bolum, ise_giris, maas FROM personel WHERE cikis_yapildi_mi != '1' OR cikis_yapildi_mi IS NULL", conn)
-    conn.close()
+    try:
+        # Tablo ve sütunlar mevcutsa veriyi çek
+        df = pd.read_sql_query("SELECT tc_kimlik, ad_soyad, bolum, ise_giris, maas FROM personel WHERE cikis_yapildi_mi != '1' OR cikis_yapildi_mi IS NULL", conn)
+    except Exception:
+        # Eğer personel tablosu henüz hiç oluşturulmadıysa çökmesini engellemek için boş dataframe oluştur
+        df = pd.DataFrame(columns=['tc_kimlik', 'ad_soyad', 'bolum', 'ise_giris', 'maas'])
+    finally:
+        conn.close()
     return df
 
 def icra_dosyalarini_getir(tc_kimlik):
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM icra_dosyalari WHERE tc_kimlik = ? ORDER BY sira_no ASC", conn, params=(tc_kimlik,))
-    conn.close()
+    try:
+        df = pd.read_sql_query("SELECT * FROM icra_dosyalari WHERE tc_kimlik = ? ORDER BY sira_no ASC", conn, params=(tc_kimlik,))
+    except Exception:
+        df = pd.DataFrame()
+    finally:
+        conn.close()
     return df
 
 def taksitleri_getir(dosya_id):
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM icra_taksitleri WHERE dosya_id = ? ORDER BY id ASC", conn, params=(int(dosya_id),))
-    conn.close()
-    # Satır açılışında kalan tutarı tablodaki verilere göre otomatik eşitle
-    df['kalan_tutar'] = df['taksit_tutari'] - df['kesilen_tutar']
+    try:
+        df = pd.read_sql_query("SELECT * FROM icra_taksitleri WHERE dosya_id = ? ORDER BY id ASC", conn, params=(int(dosya_id),))
+        if not df.empty:
+            df['kalan_tutar'] = df['taksit_tutari'] - df['kesilen_tutar']
+    except Exception:
+        df = pd.DataFrame()
+    finally:
+        conn.close()
     return df
 
 def taksit_tablosunu_guncelle(df):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     for _, row in df.iterrows():
-        # Veritabanına yazarken "Kalan Tutar" o ayın hesaplaması olarak güncellenir
         hesaplanan_kalan = float(row['taksit_tutari']) - float(row['kesilen_tutar'])
         cursor.execute('''UPDATE icra_taksitleri 
                           SET bordro_donemi=?, taksit_tutari=?, kesilen_tutar=?, kalan_tutar=? 
@@ -124,6 +140,11 @@ with content:
     st.write("---")
     
     p_df = personelleri_getir()
+    
+    if p_df.empty:
+        st.warning("Henüz sisteme kayıtlı personel bulunmamaktadır veya veritabanı kurulumu tamamlanmamıştır. Lütfen önce Personel Sicil Kartları ekranından personel ekleyin.")
+        st.stop() # Personel yoksa uygulamanın alt kısmını çalıştırmayı durdur.
+        
     p_liste = ["Seçiniz..."] + [f"{row['tc_kimlik']} - {row['ad_soyad']}" for _, row in p_df.iterrows()]
     
     if 'secili_icra_tc' not in st.session_state: st.session_state.secili_icra_tc = None
@@ -188,7 +209,6 @@ with content:
                         kesilecek = aylik_taksit if kalan_ana_para >= aylik_taksit else kalan_ana_para
                         kalan_ana_para -= kesilecek
                         
-                        # Kalan Tutar: İlk etapta hiç kesinti girilmediği için o ayki taksit tutarına eşittir.
                         kalan_tutar_aylik = kesilecek 
                         
                         cursor.execute('''INSERT INTO icra_taksitleri (dosya_id, bordro_donemi, taksit_tutari, kesilen_tutar, kalan_tutar) 
@@ -234,7 +254,10 @@ with content:
                 except:
                     formatli_giris = giris_str
                 st.markdown(f"<div class='bilgi-satiri'><b>İşe Giriş:</b> {formatli_giris}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='bilgi-satiri'><b>Maaş Bilgisi:</b> ₺{secili_p_data['maas']:,.2f}</div>", unsafe_allow_html=True)
+                
+                # Maaş bilgisi boş (None veya NaN) ise 0 olarak göster
+                gosterilecek_maas = secili_p_data['maas'] if pd.notna(secili_p_data['maas']) else 0.0
+                st.markdown(f"<div class='bilgi-satiri'><b>Maaş Bilgisi:</b> ₺{gosterilecek_maas:,.2f}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
                 st.markdown("<div class='kutu-baslik'>İCRA DOSYALARI</div>", unsafe_allow_html=True)
@@ -242,9 +265,7 @@ with content:
                     st.info("Kayıtlı icra dosyası yok.")
                 else:
                     for _, d_row in dosyalar_df.iterrows():
-                        # Kapalı olanları kırmızı daire ile işaretliyoruz
                         durum_etiketi = f"🔴 (KAPALI)" if d_row['durum'] == "KAPALI" else "(AKTİF)"
-                        
                         if st.button(f"{d_row['sira_no']}.SIRADA - {d_row['dosya_no']} {durum_etiketi}", key=f"btn_dosya_{d_row['id']}", use_container_width=True):
                             st.session_state.secili_dosya_id = d_row['id']
                             st.rerun()
@@ -258,48 +279,51 @@ with content:
                     
                     taksit_df = taksitleri_getir(st.session_state.secili_dosya_id)
                     
-                    # --- EXCEL GİBİ DÜZENLENEBİLİR TABLO ---
-                    edited_df = st.data_editor(
-                        taksit_df,
-                        column_config={
-                            "id": None, 
-                            "dosya_id": None,
-                            "bordro_donemi": "Bordro Dönemi",
-                            "taksit_tutari": st.column_config.NumberColumn("Taksit Tutarı", format="%.2f"),
-                            "kesilen_tutar": st.column_config.NumberColumn("Kesilen Tutar", format="%.2f"),
-                            "kalan_tutar": st.column_config.NumberColumn("Kalan Tutar (Aylık)", format="%.2f", disabled=True)
-                        },
-                        hide_index=True,
-                        use_container_width=True
-                    )
-                    
-                    # --- BUTONLAR ALANI: KAYDET VE SİL ---
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    btn_col1, btn_col2 = st.columns(2)
-                    with btn_col1:
-                        if st.button("💾 Tablodaki Değişiklikleri Kaydet", use_container_width=True):
-                            taksit_tablosunu_guncelle(edited_df)
-                            st.success("Taksitler başarıyla güncellendi!")
-                            st.rerun()
-                    with btn_col2:
-                        if st.button("🗑️ Dosyayı Sil", use_container_width=True, type="primary"):
-                            conn = sqlite3.connect(DB_PATH)
-                            conn.execute("DELETE FROM icra_dosyalari WHERE id=?", (st.session_state.secili_dosya_id,))
-                            conn.execute("DELETE FROM icra_taksitleri WHERE dosya_id=?", (st.session_state.secili_dosya_id,))
-                            conn.commit()
-                            conn.close()
-                            st.session_state.secili_dosya_id = None
-                            st.success("İcra dosyası ve taksitleri kalıcı olarak silindi!")
-                            st.rerun()
-                    
-                    # Alt Toplamlar
-                    toplam_kesilen = edited_df['kesilen_tutar'].sum()
-                    toplam_kalan_genel = aktif_dosya['dosya_tutari'] - toplam_kesilen
-                    
-                    st.markdown("---")
-                    d1, d2, d3 = st.columns(3)
-                    d1.metric("TOPLAM DOSYA TUTARI", f"₺{aktif_dosya['dosya_tutari']:,.2f}")
-                    d2.metric("TOPLAM KESİLEN", f"₺{toplam_kesilen:,.2f}")
-                    d3.metric("TOPLAM KALAN TUTAR", f"₺{toplam_kalan_genel:,.2f}")
+                    if not taksit_df.empty:
+                        # --- EXCEL GİBİ DÜZENLENEBİLİR TABLO ---
+                        edited_df = st.data_editor(
+                            taksit_df,
+                            column_config={
+                                "id": None, 
+                                "dosya_id": None,
+                                "bordro_donemi": "Bordro Dönemi",
+                                "taksit_tutari": st.column_config.NumberColumn("Taksit Tutarı", format="%.2f"),
+                                "kesilen_tutar": st.column_config.NumberColumn("Kesilen Tutar", format="%.2f"),
+                                "kalan_tutar": st.column_config.NumberColumn("Kalan Tutar (Aylık)", format="%.2f", disabled=True)
+                            },
+                            hide_index=True,
+                            use_container_width=True
+                        )
+                        
+                        # --- BUTONLAR ALANI: KAYDET VE SİL ---
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        btn_col1, btn_col2 = st.columns(2)
+                        with btn_col1:
+                            if st.button("💾 Tablodaki Değişiklikleri Kaydet", use_container_width=True):
+                                taksit_tablosunu_guncelle(edited_df)
+                                st.success("Taksitler başarıyla güncellendi!")
+                                st.rerun()
+                        with btn_col2:
+                            if st.button("🗑️ Dosyayı Sil", use_container_width=True, type="primary"):
+                                conn = sqlite3.connect(DB_PATH)
+                                conn.execute("DELETE FROM icra_dosyalari WHERE id=?", (st.session_state.secili_dosya_id,))
+                                conn.execute("DELETE FROM icra_taksitleri WHERE dosya_id=?", (st.session_state.secili_dosya_id,))
+                                conn.commit()
+                                conn.close()
+                                st.session_state.secili_dosya_id = None
+                                st.success("İcra dosyası ve taksitleri kalıcı olarak silindi!")
+                                st.rerun()
+                        
+                        # Alt Toplamlar
+                        toplam_kesilen = edited_df['kesilen_tutar'].sum()
+                        toplam_kalan_genel = aktif_dosya['dosya_tutari'] - toplam_kesilen
+                        
+                        st.markdown("---")
+                        d1, d2, d3 = st.columns(3)
+                        d1.metric("TOPLAM DOSYA TUTARI", f"₺{aktif_dosya['dosya_tutari']:,.2f}")
+                        d2.metric("TOPLAM KESİLEN", f"₺{toplam_kesilen:,.2f}")
+                        d3.metric("TOPLAM KALAN TUTAR", f"₺{toplam_kalan_genel:,.2f}")
+                    else:
+                        st.warning("Bu dosyaya ait taksit bilgisi bulunamadı.")
                 else:
                     st.info("Detaylarını görmek için sol taraftan bir icra dosyası seçiniz.")
